@@ -5,7 +5,7 @@ class KalmanFilter:
     I = np.identity(6)
 
     # Observation matrix: makes measurements' dimensions compatible
-    H = np.zeros(3, 6)
+    H = np.zeros((3, 6))
     H[0,0] = H[1,1] = H[2,2] = 1
 
     def __init__(self, q, mvar):
