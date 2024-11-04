@@ -1,12 +1,6 @@
 import numpy as np
 
 class KalmanFilter:
-    # identity matrix for calculations
-    I = np.identity(6)
-
-    # Observation matrix: makes measurements' dimensions compatible
-    H = np.zeros((3, 6))
-    H[0,0] = H[1,1] = H[2,2] = 1
 
     def __init__(self, q, mvar):
         # process noise spectral density
@@ -16,7 +10,15 @@ class KalmanFilter:
         self.mvar = mvar
 
         # constant measurement uncertainty
-        R = mst_var * np.identity(3)
+        self.R = self.mvar * np.identity(3)
+
+        # identity matrix for calculations
+        self.I = np.identity(6)
+
+        # Observation matrix: makes measurements' dimensions compatible
+        H = np.zeros((3, 6))
+        H[0,0] = H[1,1] = H[2,2] = 1
+        self.H = H
 
     # state prediction/transition equation
     def predict(self, x_k, u_k, w_k, d_t):
@@ -31,8 +33,10 @@ class KalmanFilter:
 
     # state update equation
     def update(self, prdn, z_k, K_k):
-        x_k = prdn + np.matmul(
-                K_k, z_k - np.matmul(self.H, prdn))
+        x_0 = np.matmul(self.H, prdn)
+        x = z_k - x_0 
+        x_k = prdn + np.matmul(K_k, x)
+
         
         return x_k
 
@@ -44,6 +48,13 @@ class KalmanFilter:
         y = np.matmul(np.matmul(K_k, self.R), K_k.T)
 
         return x + y
+
+    # map state vector to measurement space:
+    def map_msmt(self, m):
+        x = np.matmul(self.H, m)
+        x = x + self.mvar
+
+        return x
 
     # calculate process noise covariance matrix
     def Q(self, d_t):
@@ -64,7 +75,7 @@ class KalmanFilter:
 
     # calculate control input matrix:
     def B(self, d_t):
-        B = np.zeros(6, 3)
+        B = np.zeros((6, 3))
         B[0,0] = B[1,1] = B[2,2] = 0.5 * (d_t ** 2)
         B[3,0] = B[4,1] = B[5,2] = d_t
 
@@ -73,8 +84,10 @@ class KalmanFilter:
     # calculate kalman gain:
     def K(self, est_cov, d_t):
         d = np.matmul(self.H, est_cov)
-        d = np.matmul(d, self.H.T)
-        d = np.linalg.inv(d)
+        d_2 = np.matmul(d, self.H.T)
+        d_3 = d_2 + self.R
+        d_4 = np.linalg.inv(d_3)
+        d_5  = np.matmul( np.matmul(est_cov, self.H.T), d_4)
 
-        return np.matmul( np.matmul(est_cov, self.H.T), d)
-        
+        return d_5
+
