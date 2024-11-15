@@ -10,7 +10,7 @@ class KalmanFilter:
         self.mvar = mvar
 
         # constant measurement uncertainty
-        self.R = self.mvar * np.identity(3)
+        self.R = (self.mvar) * np.identity(3)
 
         # identity matrix for calculations
         self.I = np.identity(6)
@@ -21,15 +21,15 @@ class KalmanFilter:
         self.H = H
 
     # state prediction/transition equation
-    def predict(self, x_k, u_k, w_k, d_t):
-        next_prdn = np.matmul(self.F(d_t), x_k) + np.matmul(self.B(d_t), u_k) + w_k
+    def predict(self, x_k, u_k, d_t):
+        next_prdn = self.F(d_t) @ x_k + self.B(d_t) @ u_k + self.w_k(d_t)
 
         return next_prdn
 
     # covariance prediction/transition equation
-    def predict_noise(self, p_k, w_k, d_t):
+    def predict_noise(self, p_k, d_t):
         F = self.F(d_t)
-        return np.matmul(np.matmul(F, p_k), F) + w_k
+        return np.matmul(np.matmul(F, p_k), F) + self.w_k(d_t)
 
     # state update equation
     def update(self, prdn, z_k, K_k):
@@ -49,22 +49,25 @@ class KalmanFilter:
 
         return x + y
 
-    # map state vector to measurement space:
-    def map_msmt(self, m):
-        x = np.matmul(self.H, m)
-        x = x + self.mvar
+    # map state vector to measurement space, add noise:
+    def process_msmt(self, x_k):
+        v_k =  np.random.multivariate_normal(mean=np.zeros(3), cov=self.R)
+        v_k = np.matrix(v_k).T
+        z_k = self.H @ x_k + v_k
 
-        return x
+        return z_k 
 
     # calculate process noise covariance matrix
     def Q(self, d_t):
-        Q = np.zeros(6, 6)
+        Q = np.zeros((6, 6))
         Q[0,0] = Q[1,1] = Q[2,2] = (d_t ** 4) / 4
         Q[3,3] = Q[4,4] = Q[5,5] = (d_t ** 2)
         Q[3,0] = Q[4,1] = Q[5,2] = (d_t ** 3) / 2
         Q[0,3] = Q[1,4] =Q[2,5] = Q[3,0]
 
-        return q * Q
+        r = self.q * Q
+
+        return r
 
     # calculate sttate transition matrix:
     def F(self, d_t):
@@ -90,4 +93,10 @@ class KalmanFilter:
         d_5  = np.matmul( np.matmul(est_cov, self.H.T), d_4)
 
         return d_5
+
+    # calculate process noise
+    def w_k(self, d_t):
+        w_k = np.random.multivariate_normal(mean=np.zeros(6), cov=self.Q(d_t))
+        w_k = np.matrix(w_k).T
+        return w_k
 

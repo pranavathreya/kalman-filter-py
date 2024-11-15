@@ -3,8 +3,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 def main():
-    # set-up true values
-    tru_vals = np.array([
+    msts = np.array([
                         np.linspace(0, 10), # x
                         np.linspace(0, 15), # y
                         np.linspace(0, 20), # z
@@ -18,77 +17,136 @@ def main():
                                    np.ones(30) * 5,
                                    np.linspace(5,0, num=10)]), # v-z
                         ])
-   
-    # create measurements:
-    mvar = 5
-    R = mvar * np.identity(3)
     
-    # initial prediction: 0
-    prdn = np.zeros((6, 1))
+    # initial conditions 
+    est = np.zeros((6, 1))
     est_cov = 5e2 * np.identity(6) # high estimate uncertainty since first guess
                                    # is very wrong
     d_t = 0.1 # delta-time is 0.1 seconds
 
     kf = KalmanFilter(q=0.1, mvar=5)
 
-    u_k = [[0], [0], [0]]
-    w_k = [[0], [0], [0], [0], [0], [0]]
+    # control input
+    u_k = [[1], [1], [1]]
 
     ests = []
+    tru_vals = []
     msmts = []
-    for i in range(tru_vals.shape[1]):
-        m = np.asmatrix(tru_vals[:, i]).T
-        m = kf.map_msmt(m)
+    for i in range(msts.shape[1]):
+        # new predicted state:
+        prdn = kf.predict(est, u_k, d_t)
+        est_cov_nxt = kf.predict_noise(est_cov, d_t)
+        tru_vals.append(prdn)
+        
+        # calculate kalman gain and measure data:
+        K = kf.K(est_cov_nxt, d_t) 
+        m = np.asmatrix(msts[:, i]).T
+        m = kf.process_msmt(m)
         msmts.append(m)
 
-        # compute kalman gain:
-        K = kf.K(est_cov, d_t) 
-
-        # update estimate with gain and measurement:
+        # update state matrix and state covariance:
         est = kf.update(prdn, m, K)
-
-        # update estimate covariance:
         est_cov = kf.update_noise(est_cov, K)
         ests.append(est)
 
-        # make new prediction:
-        prdn = kf.predict(est, u_k, w_k, d_t)
-        # update predict covariance:
-        est_cov = kf.predict_noise(est_cov, w_k, d_t)
 
     ests = np.hstack(ests)
     msmts = np.hstack(msmts)
+    tru_vals = np.hstack(tru_vals)
 
-    plot(tru_vals[0, :], msmts[0, :].tolist()[0], ests[0, :].tolist()[0], "x (m)")
-    plot(tru_vals[1, :], msmts[1, :].tolist()[0], ests[1, :].tolist()[0], "y (m)")
-    plot(tru_vals[2, :], msmts[2, :].tolist()[0], ests[2, :].tolist()[0], "z (m)")
+    # plot x
+    plot(tru_vals[0, :].tolist()[0], 
+         msmts[0, :].tolist()[0],
+         ests[0, :].tolist()[0], "x (m)", "x positions vs time")
+
+    # plot y
+    plot(tru_vals[1, :].tolist()[0],
+         msmts[1, :].tolist()[0],
+         ests[1, :].tolist()[0], "y (m)", "y positions vs time")
+
+    # plot z
+    plot(tru_vals[2, :].tolist()[0], 
+         msmts[2, :].tolist()[0],
+         ests[2, :].tolist()[0], "z (m)", "z positions vs time")
+
+    # plot x.
+    plot_velocities(tru_vals[3, :].tolist()[0], 
+         ests[3, :].tolist()[0], "x (mps)", "x velocities vs time")
+
+    # plot y.
+    plot_velocities(tru_vals[4, :].tolist()[0],
+         ests[4, :].tolist()[0], "y (mps)", "y velocities vs time")
+
+    # plot z.
+    plot_velocities(tru_vals[5, :].tolist()[0], 
+         ests[5, :].tolist()[0], "z (mps)", "z velocities vs time")
+
+    # calculate RMSE for position and velocity
+    print("RMSE(x):", rmse(tru_vals[0, :].tolist()[0], ests[0, :].tolist()[0]))
+    print("RMSE(y):", rmse(tru_vals[1, :].tolist()[0], ests[1, :].tolist()[0]))
+    print("RMSE(z):", rmse(tru_vals[2, :].tolist()[0], ests[2, :].tolist()[0]))
+    print("RMSE(x.):", rmse(tru_vals[3, :].tolist()[0], ests[3, :].tolist()[0]))
+    print("RMSE(y.):", rmse(tru_vals[4, :].tolist()[0], ests[4, :].tolist()[0]))
+    print("RMSE(z.):", rmse(tru_vals[5, :].tolist()[0], ests[5, :].tolist()[0]))
+
+    # plot 3-D path
     plot_3d(tru_vals, msmts, ests)
 
-def plot(tru_vals, msmts, ests, ylabel):
+def rmse(tru, est):
+    return np.sqrt(np.mean((np.array(tru) - np.array(est)))**2)
+
+def plot(tru_vals, msmts, ests, ylabel, ttl):
+    plt.figure()
     time_ = np.arange(len(tru_vals)) * 0.1
-    plt.scatter(time_, tru_vals, label="true values")
-    plt.scatter(time_, msmts, label="measurements")
-    plt.scatter(time_, ests, label="estimates")
+    plt.scatter(time_, tru_vals, label="true values", marker=".")
+    plt.scatter(time_, msmts, label="measurements", marker=".")
+    plt.scatter(time_, ests, label="estimates", marker=".")
 
     plt.legend()
     plt.xlabel("Time (s)")
     plt.ylabel(ylabel)
-    plt.show()
+    plt.grid()
+    plt.title(ttl)
+    plt.savefig(ttl+".png")
+
+def plot_velocities(tru_vals, ests, ylabel, ttl):
+    plt.figure()
+    time_ = np.arange(len(tru_vals)) * 0.1
+    plt.scatter(time_, tru_vals, label="true values", marker=".")
+    plt.scatter(time_, ests, label="estimates", marker=".")
+
+    plt.legend()
+    plt.xlabel("Time (s)")
+    plt.ylabel(ylabel)
+    plt.grid()
+    plt.title(ttl)
+    plt.savefig(ttl+".png")
 
 def plot_3d(tru_vals, msmts, ests):
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
 
-    ax.scatter(tru_vals[0, :], tru_vals[1, :], tru_vals[2, :], label="true values")
-    ax.scatter(msmts[0, :].tolist()[0], msmts[1, :].tolist()[0], msmts[2, :].tolist()[0], label="measurements")
-    ax.scatter(ests[0, :].tolist()[0], ests[1, :].tolist()[0], ests[2, :].tolist()[0], label="estimates")
+    # plot true values
+    ax.scatter(tru_vals[0, :].tolist()[0], 
+               tru_vals[1, :].tolist()[0], 
+               tru_vals[2, :].tolist()[0], label="true values", marker=".")
+    
+    # plot measurements
+    ax.scatter(msmts[0, :].tolist()[0],
+               msmts[1, :].tolist()[0],
+               msmts[2, :].tolist()[0], label="measurements", marker=".")
+
+    # plot estimates
+    ax.scatter(ests[0, :].tolist()[0],
+               ests[1, :].tolist()[0],
+               ests[2, :].tolist()[0], label="estimates", marker=".")
 
     ax.set_xlabel('x (m)')
     ax.set_ylabel('y (m)')
     ax.set_zlabel('z (m)')
-   
+    plt.title("3D Trajectory") 
     plt.legend()
-    plt.show()
+    plt.savefig("3D Trajectory")
 
 
 if __name__ == '__main__':
