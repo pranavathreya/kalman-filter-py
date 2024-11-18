@@ -27,21 +27,20 @@ class KalmanFilter:
         return next_prdn
 
     # covariance prediction/transition equation
-    def predict_noise(self, p_k, d_t):
+    def predict_uncertainty(self, p_k, d_t):
         F = self.F(d_t)
-        return np.matmul(np.matmul(F, p_k), F) + self.w_k(d_t)
+        return (F @ p_k) @ F.T + self.Q(d_t)
 
     # state update equation
-    def update(self, prdn, z_k, K_k):
+    def estimate(self, prdn, z_k, K_k):
         x_0 = np.matmul(self.H, prdn)
         x = z_k - x_0 
         x_k = prdn + np.matmul(K_k, x)
-
         
         return x_k
 
     # covariance update equation
-    def update_noise(self, est_cov, K_k):
+    def estimate_uncertainty(self, est_cov, K_k):
         x = self.I - np.matmul(K_k, self.H)
         x = np.matmul(x, np.matmul(est_cov, x.T))
         
@@ -98,5 +97,6 @@ class KalmanFilter:
     def w_k(self, d_t):
         w_k = np.random.multivariate_normal(mean=np.zeros(6), cov=self.Q(d_t))
         w_k = np.matrix(w_k).T
+
         return w_k
 
