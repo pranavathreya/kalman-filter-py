@@ -10,7 +10,7 @@ class KalmanFilter:
         self.mvar = mvar
 
         # constant measurement uncertainty
-        self.R = (self.mvar) * np.identity(3)
+        self.R = (self.mvar**2) * np.identity(3)
 
         # identity matrix for calculations
         self.I = np.identity(6)
@@ -32,8 +32,7 @@ class KalmanFilter:
         return (F @ p_k) @ F.T + self.Q(d_t)
 
     # state update equation
-    def estimate(self, prdn, z_k, K_k):
-        x_0 = np.matmul(self.H, prdn)
+    def estimate(self, prdn, z_k, K_k): x_0 = np.matmul(self.H, prdn)
         x = z_k - x_0 
         x_k = prdn + np.matmul(K_k, x)
         

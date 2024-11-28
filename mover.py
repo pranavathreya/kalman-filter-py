@@ -10,7 +10,7 @@ def main():
     d_t = 0.1 # delta-time is 0.1 seconds
 
     msts = make_true_values(d_t)
-    kf = KalmanFilter(q=10, mvar=5)
+    kf = KalmanFilter(q=0.1, mvar=5)
 
     # control input
     u_k = [[1], [1], [1]]
@@ -98,7 +98,7 @@ def plot(state_space_vals, msmts, ests, ylabel, ttl):
 def plot_velocities(state_space_vals, ests, ylabel, ttl):
     plt.figure()
     time_ = np.arange(len(state_space_vals)) * 0.1
-    plt.scatter(time_, state_space_vals, label="true values", marker=".")
+    plt.scatter(time_, state_space_vals, label="state space model", marker=".")
     plt.scatter(time_, ests, label="estimates", marker=".")
 
     plt.legend()
@@ -113,19 +113,19 @@ def plot_3d(state_space_vals, msmts, ests):
     ax = fig.add_subplot(projection='3d')
 
     # plot true values
-    ax.scatter(state_space_vals[0, :].tolist()[0], 
+    ax.plot(state_space_vals[0, :].tolist()[0], 
                state_space_vals[1, :].tolist()[0], 
-               state_space_vals[2, :].tolist()[0], label="true values", marker=".")
+               state_space_vals[2, :].tolist()[0], label="state space model")
     
     # plot measurements
     ax.scatter(msmts[0, :].tolist()[0],
                msmts[1, :].tolist()[0],
-               msmts[2, :].tolist()[0], label="measurements", marker=".")
+               msmts[2, :].tolist()[0], label="measurements", marker="o")
 
     # plot estimates
-    ax.scatter(ests[0, :].tolist()[0],
+    ax.plot(ests[0, :].tolist()[0],
                ests[1, :].tolist()[0],
-               ests[2, :].tolist()[0], label="estimates", marker=".")
+               ests[2, :].tolist()[0], label="estimates")
 
     ax.set_xlabel('x (m)')
     ax.set_ylabel('y (m)')
@@ -133,6 +133,7 @@ def plot_3d(state_space_vals, msmts, ests):
     plt.title("3D Trajectory") 
     plt.legend()
     plt.savefig("3D Trajectory")
+    plt.show()
 
 def make_true_values(d_t):
     F = np.array([[1, 0, 0, d_t,   0,   0, 0.5*(d_t**2),            0,            0],
@@ -148,7 +149,7 @@ def make_true_values(d_t):
 
     m = np.array([[0], [0], [0], [0], [0], [0], [1], [1], [1]])
     tru_vals = []
-    for i in range(50):
+    for i in range(200):
         m = F @ m
         tru_vals.append(m[:6, :])
     tru_vals = np.round(np.hstack(tru_vals))
