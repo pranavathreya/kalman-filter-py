@@ -1,101 +1,198 @@
 import numpy as np
+from matplotlib import pyplot as plt
 
-class KalmanFilter:
+def main():
+    # delta-time is 0.1 seconds
+    d_t = 0.1 
+    t_end = 20
+    time_steps = int(t_end / d_t)
+    # state space model
+    F = np.array([[1, 0, 0, d_t,   0,   0,], 
+                  [0, 1, 0,   0, d_t,   0,], 
+                  [0, 0, 1,   0,   0, d_t,], 
+                  [0, 0, 0,   1,   0,   0,], 
+                  [0, 0, 0,   0,   1,   0,], 
+                  [0, 0, 0,   0,   0,   1,]]
+                 )
+                
+    # control input 
+    G = np.array([
+         [0.5*(d_t**2),            0,            0],
+         [           0, 0.5*(d_t**2),            0],
+         [           0,            0, 0.5*(d_t**2)],
+         [         d_t,            0,            0],
+         [           0,          d_t,            0],
+         [           0,            0,          d_t]]
+                 )
+    u = np.array([[0.5], [-0.3], [0.2]])
 
-    def __init__(self, q, mvar):
-        # process noise spectral density
-        self.q = q
+    # initial condition
+    x = np.array([[0], [0], [0], [0], [0], [0]])
 
-        # measurement noise variance
-        self.mvar = mvar
+    # process noise
+    q = 0.1 
+    Q = np.array([
+        [(d_t**4)/4, 0,           0,           (d_t**3)/2, 0,           0],
+        [0,           (d_t**4)/4, 0,           0,           (d_t**3)/2, 0],
+        [0,           0,           (d_t**4)/4, 0,           0,           (d_t**3)/2],
+        [(d_t**3)/2, 0,           0,           d_t**2,      0,           0],
+        [0,           (d_t**3)/2, 0,           0,           d_t**2,      0],
+        [0,           0,           (d_t**3)/2, 0,           0,           d_t**2],
+    ])
+    Q = q * Q
 
-        # constant measurement uncertainty
-        self.R = (self.mvar**2) * np.identity(3)
+    # generate true states
+    tru_vals = []
+    np.random.seed(42)
+    for i in range(time_steps):
+        w = np.random.multivariate_normal(mean=np.zeros(6), cov=Q)
+        w = w[:, np.newaxis]
+        x = F @ x + G @ u + w
+        tru_vals.append(x)
+    tru_vals = np.hstack(tru_vals)
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+    ax.plot(tru_vals[0, :], 
+            tru_vals[1, :], 
+            tru_vals[2, :], label="true state")
 
-        # identity matrix for calculations
-        self.I = np.identity(6)
+    # measurement uncertainty
+    mstd = 5
+    R = (mstd**2) * np.eye(3)
 
-        # Observation matrix: makes measurements' dimensions compatible
-        H = np.zeros((3, 6))
-        H[0,0] = H[1,1] = H[2,2] = 1
-        self.H = H
+    # estimate uncertainty
+    P = np.eye(6)
+    #P = 5e2 * P # set high initially
 
-    # state prediction/transition equation
-    def predict(self, x_k, u_k, d_t):
-        next_prdn = self.F(d_t) @ x_k + self.B(d_t) @ u_k + self.w_k(d_t)
+    # observation matrix
+    H = np.array([[1, 0, 0, 0, 0, 0],
+                  [0, 1, 0, 0, 0, 0],
+                  [0, 0, 1, 0, 0, 0]])
+    
+    
+    I = np.eye(6)
+    ests = []
+    state_space_vals = []
+    msmts = []
+    np.random.seed(42)
+    #np.set_printoptions(suppress=True)
+    e = np.array([[0], [0], [0], [0], [0], [0]])
+    for i in range(time_steps):
+        # new predicted state:
+        prdn = F @ e + G @ u
+        P = F @ P @ F.T + Q
 
-        return next_prdn
+        # calculate kalman gain and measure data:
+        k = P @ H.T @ np.linalg.inv(H @ P @ H.T + R)
 
-    # covariance prediction/transition equation
-    def predict_uncertainty(self, p_k, d_t):
-        F = self.F(d_t)
-        return (F @ p_k) @ F.T + self.Q(d_t)
+        # measurement:
+        v = np.random.multivariate_normal(mean=np.zeros(3), cov=R)
+        v = v[:, np.newaxis]
+        x = tru_vals[:, i][:, np.newaxis]
+        z = H @ x + v
+        msmts.append(z)        
 
-    # state update equation
-    def estimate(self, prdn, z_k, K_k): x_0 = np.matmul(self.H, prdn)
-        x = z_k - x_0 
-        x_k = prdn + np.matmul(K_k, x)
-        
-        return x_k
+        # innovation:
+        e = prdn + k @ (z - H @ prdn)
+        s = I - k @ H
+        P =  s @ P @ s.T + k @ R @ k.T
+        ests.append(e)
+    
+    ests = np.hstack(ests)
+    msmts = np.hstack(msmts)
+    time_ = np.arange(time_steps) * 0.1
 
-    # covariance update equation
-    def estimate_uncertainty(self, est_cov, K_k):
-        x = self.I - np.matmul(K_k, self.H)
-        x = np.matmul(x, np.matmul(est_cov, x.T))
-        
-        y = np.matmul(np.matmul(K_k, self.R), K_k.T)
+    ## plot x
+    #plot(state_space_vals[0, :], 
+    #     msmts[0, :],
+    #     ests[0, :], time_, "x (m)", "x positions vs time")
 
-        return x + y
+    ## plot y
+    #plot(state_space_vals[1, :],
+    #     msmts[1, :],
+    #     ests[1, :], time_, "y (m)", "y positions vs time")
+    ## plot z
+    #plot(state_space_vals[2, :], 
+    #     msmts[2, :],
+    #     ests[2, :], time_, "z (m)", "z positions vs time")
 
-    # map state vector to measurement space, add noise:
-    def process_msmt(self, x_k):
-        v_k =  np.random.multivariate_normal(mean=np.zeros(3), cov=self.R)
-        v_k = np.matrix(v_k).T
-        z_k = self.H @ x_k + v_k
+    ## plot x.
+    #plot_velocities(state_space_vals[3, :], 
+    #     ests[3, :], time_, "x (mps)", "x velocities vs time")
 
-        return z_k 
+    ## plot y.
+    #plot_velocities(state_space_vals[4, :],
+    #     ests[4, :], time_,  "y (mps)", "y velocities vs time")
 
-    # calculate process noise covariance matrix
-    def Q(self, d_t):
-        Q = np.zeros((6, 6))
-        Q[0,0] = Q[1,1] = Q[2,2] = (d_t ** 4) / 4
-        Q[3,3] = Q[4,4] = Q[5,5] = (d_t ** 2)
-        Q[3,0] = Q[4,1] = Q[5,2] = (d_t ** 3) / 2
-        Q[0,3] = Q[1,4] =Q[2,5] = Q[3,0]
+    ## plot z.
+    #plot_velocities(state_space_vals[5, :], 
+    #     ests[5, :], time_, "z (mps)", "z velocities vs time")
 
-        r = self.q * Q
+    # calculate RMSE for position and velocity
+    print("RMSE(x):", rmse(tru_vals[0, :].tolist(), ests[0, :].tolist()))
+    print("RMSE(y):", rmse(tru_vals[1, :].tolist(), ests[1, :].tolist()))
+    print("RMSE(z):", rmse(tru_vals[2, :].tolist(), ests[2, :].tolist()))
+    print("RMSE(x.):", rmse(tru_vals[3, :].tolist(), ests[3, :].tolist()))
+    print("RMSE(y.):", rmse(tru_vals[4, :].tolist(), ests[4, :].tolist()))
+    print("RMSE(z.):", rmse(tru_vals[5, :].tolist(), ests[5, :].tolist()))
 
-        return r
+    # plot 3-D path
+    plot_3d(tru_vals, msmts, ests)
 
-    # calculate sttate transition matrix:
-    def F(self, d_t):
-        F = np.identity(6)
-        F[0,3] = F[1,4] = F[2,5] = d_t
+def rmse(tru, est):
+    return np.sqrt(np.mean((np.array(tru) - np.array(est)))**2)
 
-        return F
+def plot(state_space_vals, msmts, ests, time_,  ylabel, ttl):
+    plt.figure()
+    plt.plot(time_, state_space_vals, label="state space model", marker=".")
+    plt.plot(time_, msmts, label="measurements", marker=".")
+    plt.plot(time_, ests, label="estimates", marker=".")
 
-    # calculate control input matrix:
-    def B(self, d_t):
-        B = np.zeros((6, 3))
-        B[0,0] = B[1,1] = B[2,2] = 0.5 * (d_t ** 2)
-        B[3,0] = B[4,1] = B[5,2] = d_t
+    plt.legend()
+    plt.xlabel("Time (s)")
+    plt.ylabel(ylabel)
+    plt.grid()
+    plt.title(ttl)
+    plt.savefig(ttl+".png") 
 
-        return B
+def plot_velocities(state_space_vals, ests, time_, ylabel, ttl):
+    plt.figure()
+    plt.scatter(time_, state_space_vals, label="state space model", marker=".")
+    plt.scatter(time_, ests, label="estimates", marker=".")
 
-    # calculate kalman gain:
-    def K(self, est_cov, d_t):
-        d = np.matmul(self.H, est_cov)
-        d_2 = np.matmul(d, self.H.T)
-        d_3 = d_2 + self.R
-        d_4 = np.linalg.inv(d_3)
-        d_5  = np.matmul( np.matmul(est_cov, self.H.T), d_4)
+    plt.legend()
+    plt.xlabel("Time (s)")
+    plt.ylabel(ylabel)
+    plt.grid()
+    plt.title(ttl)
+    plt.savefig(ttl+".png")
 
-        return d_5
+def plot_3d(state_space_vals, msmts, ests):
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
 
-    # calculate process noise
-    def w_k(self, d_t):
-        w_k = np.random.multivariate_normal(mean=np.zeros(6), cov=self.Q(d_t))
-        w_k = np.matrix(w_k).T
+    # plot true values
+    ax.plot(state_space_vals[0, :], 
+            state_space_vals[1, :], 
+            state_space_vals[2, :], label="true state")
+    
+    # plot measurements
+    ax.scatter(msmts[0, :],
+               msmts[1, :],
+               msmts[2, :], label="measurements", marker="o")
 
-        return w_k
+    # plot estimates
+    ax.plot(ests[0, :],
+               ests[1, :],
+               ests[2, :], label="estimates")
 
+    ax.set_xlabel('x (m)')
+    ax.set_ylabel('y (m)')
+    ax.set_zlabel('z (m)')
+    plt.title("3D Trajectory") 
+    fig.legend()
+    fig.savefig("3D Trajectory")
+    plt.show()
+                  
+if __name__ == '__main__':
+    main()
