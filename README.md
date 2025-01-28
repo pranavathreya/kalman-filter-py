@@ -2,4 +2,4 @@
 ## 3D Plot of True Values, Estimates, & Measurements
 ![alt text][logo]
 
-[logo]: https://github.com/pranavathreya/kalman-filter-py/blob/main/3d_traj.png "3D Trajectory Plot"
+[logo]: https://github.com/pranavathreya/kalman-filter-py/blob/master/3d_traj.png "3D Trajectory Plot"
